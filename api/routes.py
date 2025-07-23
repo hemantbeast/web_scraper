@@ -7,6 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import AzureChatOpenAI
 from pydantic import SecretStr
 
+from api.actions import suggest_actions
 from scraper.page_scraper import crawl_website, read_all_scraped_pages_text
 from utils.page_utils import BASE_SCRAPED_DATA_DIR
 from vectorstore.embedding import load_vector_store, create_and_save_vector_store
@@ -188,8 +189,14 @@ async def answer_query_endpoint(
         # Step 5: Invoke the chain to get the answer from the LLM
         response = await chain.ainvoke({"context": context_text, "query": query})
 
+        answer = response.content
+
+        # Suggest actions based on query and answer
+        actions = suggest_actions(query, answer)
+
         return {
-            "answer": response.content
+            "answer": answer,
+            "actions": actions,
         }
 
     except FileNotFoundError as e:
