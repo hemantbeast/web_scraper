@@ -7,7 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import AzureChatOpenAI
 from pydantic import SecretStr
 
-from scraper.page_scraper import crawl_website
+from scraper.page_scraper import crawl_website, read_all_scraped_pages_text
 from utils.page_utils import BASE_SCRAPED_DATA_DIR
 from vectorstore.embedding import load_vector_store, create_and_save_vector_store
 
@@ -26,17 +26,25 @@ async def lifespan(app: FastAPI):
     # Code after yield will run on shutdown (e.g., for cleanup)
     print("FastAPI application shutting down.")
 
-@router.get("/scrape", summary="Scrape a website (all internal links) and create a unique local vector store")
-async def scrape_website(url: str = Query(
-    ...,
-    examples=["https://www.google.com"]
-)):
+
+@router.get(
+    path="/scrape",
+    summary="Scrape a website (all internal links) and create a unique local vector store"
+)
+async def scrape_website(
+        url: str = Query(
+            ...,
+            examples=["https://www.google.com"]
+        )):
     """
     Initiate the web scraping process for a given URL.
     The scraped content is processed, embedded, and stored in a local FAISS vector database.
     """
     if not url:
-        raise HTTPException(status_code=400, detail="'url' field is required in the request body.")
+        raise HTTPException(
+            status_code=400,
+            detail="'url' field is required in the request body."
+        )
 
     # Generate a unique UUID for this scraping operation
     scrape_id = str(uuid.uuid4())
@@ -47,18 +55,73 @@ async def scrape_website(url: str = Query(
         texts = await crawl_website(url, scrape_id)
 
         if not texts:
-            raise HTTPException(status_code=500,
-                                detail="No content was scraped from the provided URL or its internal links.")
+            raise HTTPException(
+                status_code=500,
+                detail="No content was scraped from the provided URL or its internal links."
+            )
 
         # Step 2: Create and save the vector store from the processed text chunks
         await create_and_save_vector_store(texts, scrape_id)
 
-        return {"message": f"Successfully crawled '{url}' and created a new vector store.", "scrape_id": scrape_id}
+        return {
+            "message": f"Successfully crawled '{url}' and created a new vector store.",
+            "scrape_id": scrape_id
+        }
+
     except Exception as e:
         # Catch any exception during the process and return an appropriate HTTP error
         raise HTTPException(status_code=500, detail=f"Failed to scrape and process website: {e}")
 
-@router.get("/query", summary="Query the scraped website content using a specific scrape ID")
+
+@router.get(
+    path="/update_vector",
+    summary="Update/Rebuild the FAISS vector store from existing scraped pages"
+)
+async def update_vector(
+        scrape_id: str = Query(
+            ...,
+            examples=["d3478378abe3448cda"]
+        )):
+    """
+    Initiate the web scraping process for a given URL.
+    The scraped content is processed, embedded, and stored in a local FAISS vector database.
+    """
+    if not scrape_id:
+        raise HTTPException(
+            status_code=400,
+            detail="'scrape_id' field is required in the request body."
+        )
+
+    try:
+        # Read all text content from the previously saved pages
+        texts = await read_all_scraped_pages_text(scrape_id)
+
+        if not texts:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No scraped pages found for ID '{scrape_id}'. Cannot update vector store."
+            )
+
+        # Re-create and save the vector store using the retrieved text
+        # This will overwrite the existing FAISS index for this scrape_id
+        await create_and_save_vector_store(texts, scrape_id)
+
+        return {
+            "message": f"Successfully updated vector store for scrape_id '{scrape_id}' from existing pages."
+        }
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"Error: {e}")
+
+    except Exception as e:
+        print(f"Error during update vector store operation for scrape_id {scrape_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update vector store: {e}")
+
+
+@router.get(
+    path="/query",
+    summary="Query the scraped website content using a specific scrape ID"
+)
 async def answer_query_endpoint(
         query: str = Query(
             ...,
@@ -74,6 +137,7 @@ async def answer_query_endpoint(
     """
     if not scrape_id:
         raise HTTPException(status_code=400, detail="'scrape_id' field is required in the request body.")
+
     if not query:
         raise HTTPException(status_code=400, detail="'query' field is required in the request body.")
 
@@ -124,9 +188,13 @@ async def answer_query_endpoint(
         # Step 5: Invoke the chain to get the answer from the LLM
         response = await chain.ainvoke({"context": context_text, "query": query})
 
-        return {"answer": response.content}
+        return {
+            "answer": response.content
+        }
+
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=f"Scraped data for ID '{scrape_id}' not found. Please scrape it first. Error: {e}")
+
     except Exception as e:
         print(f"Error during query operation for scrape_id {scrape_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process query: {e}")

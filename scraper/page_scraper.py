@@ -190,3 +190,23 @@ async def crawl_website(start_url: str, scrape_id: str) -> list[str]:
         if driver:
             driver.quit()
             print("Selenium WebDriver closed after crawling.")
+
+
+async def read_all_scraped_pages_text(scrape_id: str) -> list[str]:
+    """
+    Reads all text content from the locally saved .txt files for a given scrape_id.
+    """
+    pages_dir = get_pages_dir(scrape_id)
+    if not os.path.exists(pages_dir):
+        raise FileNotFoundError(f"Scraped pages directory for ID '{scrape_id}' not found at {pages_dir}")
+
+    all_texts = []
+    for filename in os.listdir(pages_dir):
+        if filename.endswith(".md"):
+            filepath = os.path.join(pages_dir, filename)
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    all_texts.append(f.read())
+            except Exception as e:
+                print(f"Error reading file {filepath}: {e}")
+    return all_texts
