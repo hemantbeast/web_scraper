@@ -65,9 +65,8 @@ def _process_content_and_store(url: str, markdown: str, scrape_id: str, text_spl
     all_scraped_texts.extend(chunks)
 
     # Generate filename based on title or URL
-    title_tag = soup.title.string.strip() if soup.title else ''
-
-    if title_tag:
+    if soup:
+        title_tag = soup.title.string.strip() if soup.title else ''
         filename_base = slugify(title_tag)
     else:
         parsed_url = urlparse(url)
