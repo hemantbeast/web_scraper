@@ -53,7 +53,7 @@ def _extract_text_from_html(soup: BeautifulSoup) -> str:
 
 
 def _process_content_and_store(url: str, markdown: str, scrape_id: str, text_splitter: RecursiveCharacterTextSplitter,
-                               all_scraped_texts: list, soup: BeautifulSoup):
+                               all_scraped_texts: list):
     """
     Splits text content into chunks, adds to the main list, and saves to a local file.
     """
@@ -64,13 +64,9 @@ def _process_content_and_store(url: str, markdown: str, scrape_id: str, text_spl
     chunks = text_splitter.split_text(markdown)
     all_scraped_texts.extend(chunks)
 
-    # Generate filename based on title or URL
-    if soup:
-        title_tag = soup.title.string.strip() if soup.title else ''
-        filename_base = slugify(title_tag)
-    else:
-        parsed_url = urlparse(url)
-        filename_base = slugify(parsed_url.path or parsed_url.netloc)
+    # Generate filename based on URL
+    parsed_url = urlparse(url)
+    filename_base = slugify(parsed_url.path or parsed_url.netloc)
 
     if not filename_base:
         unique_id = str(uuid.uuid4())
@@ -151,7 +147,7 @@ async def crawl_website(start_url: str, scrape_id: str) -> list[str]:
             visited_urls.add(normalized_current_url)
 
             markdown = ""
-            soup = None
+            soup: BeautifulSoup | None = None
 
             # Determine content type based on extension
             if normalized_current_url.lower().endswith('.pdf'):
@@ -176,7 +172,7 @@ async def crawl_website(start_url: str, scrape_id: str) -> list[str]:
                 print(f"No meaningful text extracted from {current_url}. Skipping for embedding.")
                 continue
 
-            _process_content_and_store(current_url, markdown, scrape_id, text_splitter, all_scraped_texts, soup)
+            _process_content_and_store(current_url, markdown, scrape_id, text_splitter, all_scraped_texts)
 
             # Extract links only from HTML pages (PDFs don't have navigable links in this context)
             if soup:
