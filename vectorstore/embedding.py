@@ -9,6 +9,11 @@ from pydantic import SecretStr
 from utils.page_utils import get_faiss_index_dir
 
 
+# --- Global Cache for Vector Stores ---
+# Stores loaded FAISS vector store instances, keyed by scrape_id
+vector_store_cache = {}
+
+
 async def create_and_save_vector_store(texts: list[str], scrape_id: str):
     """
     Creates a FAISS vector store from text chunks and saves it locally
@@ -41,11 +46,20 @@ async def create_and_save_vector_store(texts: list[str], scrape_id: str):
     await asyncio.to_thread(vectorstore.save_local, faiss_index_dir)
     print(f"Vector store successfully created and saved for scrape_id {scrape_id} to {faiss_index_dir}")
 
+    # Store the newly created vector store in the cache
+    vector_store_cache[scrape_id] = vectorstore
+
 
 async def load_vector_store(scrape_id: str):
     """
     Loads an existing FAISS vector store from a local directory for a specific scrape_id.
+    Checks the global cache first.
     """
+    # Check cache first
+    if scrape_id in vector_store_cache:
+        print(f"Vector store for scrape_id {scrape_id} loaded from cache.")
+        return vector_store_cache[scrape_id]
+
     faiss_index_dir = get_faiss_index_dir(scrape_id)
     if not os.path.exists(faiss_index_dir):
         raise FileNotFoundError(f"FAISS index for scrape_id {scrape_id} not found at {faiss_index_dir}")
@@ -70,4 +84,7 @@ async def load_vector_store(scrape_id: str):
         FAISS.load_local, faiss_index_dir, embeddings, allow_dangerous_deserialization=True
     )
     print(f"Vector store successfully loaded for scrape_id {scrape_id} from {faiss_index_dir}")
+
+    # Store in cache for future use
+    vector_store_cache[scrape_id] = vectorstore
     return vectorstore
