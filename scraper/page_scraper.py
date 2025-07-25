@@ -150,13 +150,13 @@ async def crawl_website(start_url: str, scrape_id: str) -> list[str]:
             soup: BeautifulSoup | None = None
 
             # Determine content type based on extension
-            if normalized_current_url.lower().endswith('.pdf'):
-                print(f"Processing PDF document: {normalized_current_url}")
-                markdown = await extract_text_from_pdf_url(normalized_current_url)
-
-            elif any(normalized_current_url.lower().endswith(ext) for ext in media_extensions_to_skip):
+            if any(normalized_current_url.lower().endswith(ext) for ext in media_extensions_to_skip):
                 print(f"Skipping non-textual binary document: {normalized_current_url}")
                 continue  # Skip to next URL in queue
+
+            elif normalized_current_url.lower().endswith('.pdf'):
+                print(f"Processing PDF document: {normalized_current_url}")
+                markdown = await extract_text_from_pdf_url(normalized_current_url)
 
             else:
                 # Assume HTML content for other URLs
