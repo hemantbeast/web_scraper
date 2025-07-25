@@ -35,10 +35,13 @@ async def lifespan(app: FastAPI):
 async def scrape_website(
         url: str = Query(
             ...,
-            examples=["https://www.google.com"]
+            examples=[
+                "https://www.google.com",
+                "https://www.google.com,https://facebook.com"
+            ]
         )):
     """
-    Initiate the web scraping process for a given URL.
+    Initiate the web scraping process for a given URL or comma separated URLs.
     The scraped content is processed, embedded, and stored in a local FAISS vector database.
     """
     if not url:
@@ -53,16 +56,22 @@ async def scrape_website(
 
     try:
         # Step 1: Scrape and process the website content using Selenium
-        texts = await crawl_website(url, scrape_id)
+        urls = url.split(",")
+        all_texts: list[str] = []
 
-        if not texts:
+        if urls:
+            for item in urls:
+                texts = await crawl_website(item, scrape_id)
+                all_texts.extend(texts)
+
+        if not all_texts:
             raise HTTPException(
                 status_code=500,
                 detail="No content was scraped from the provided URL or its internal links."
             )
 
         # Step 2: Create and save the vector store from the processed text chunks
-        await create_and_save_vector_store(texts, scrape_id)
+        await create_and_save_vector_store(all_texts, scrape_id)
 
         return {
             "message": f"Successfully crawled '{url}' and created a new vector store.",
