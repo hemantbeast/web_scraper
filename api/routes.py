@@ -9,7 +9,7 @@ from pydantic import SecretStr
 
 from api.actions import suggest_actions
 from scraper.page_scraper import crawl_website, read_all_scraped_pages_text
-from utils.page_utils import BASE_SCRAPED_DATA_DIR
+from utils.page_utils import BASE_SCRAPED_DATA_DIR, get_pages_dir, get_url_page_dir, slugify
 from vectorstore.embedding import load_vector_store, create_and_save_vector_store
 
 router = APIRouter()
@@ -59,9 +59,16 @@ async def scrape_website(
         urls = url.split(",")
         all_texts: list[str] = []
 
+        pages_dir = get_pages_dir(scrape_id)
+        os.makedirs(pages_dir, exist_ok=True)
+
         if urls:
             for item in urls:
-                texts = await crawl_website(item, scrape_id)
+                url_dir = get_url_page_dir(scrape_id, slugify(item))
+                os.makedirs(url_dir, exist_ok=True)
+
+                print(f"Starting crawl for scrape_id: {scrape_id} from {item}")
+                texts = await crawl_website(item, url_dir)
                 all_texts.extend(texts)
 
         if not all_texts:

@@ -12,7 +12,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from utils.page_utils import get_pages_dir, clean_html_content, slugify
+from utils.page_utils import get_pages_dir, clean_html_content, slugify, get_url_page_dir
 from utils.url_utils import get_domain, normalize_url, extract_text_from_pdf_url
 from utils.web_driver_utils import get_web_driver
 
@@ -52,8 +52,8 @@ def _extract_text_from_html(soup: BeautifulSoup) -> str:
     return html2text.html2text(str(soup.body))
 
 
-def _process_content_and_store(url: str, markdown: str, scrape_id: str, text_splitter: RecursiveCharacterTextSplitter,
-                               all_scraped_texts: list):
+def _process_content_and_store(url: str, markdown: str, text_splitter: RecursiveCharacterTextSplitter,
+                               all_scraped_texts: list, url_dir: str):
     """
     Splits text content into chunks, adds to the main list, and saves to a local file.
     """
@@ -72,8 +72,7 @@ def _process_content_and_store(url: str, markdown: str, scrape_id: str, text_spl
         unique_id = str(uuid.uuid4())
         filename_base = unique_id
 
-    pages_dir = get_pages_dir(scrape_id)
-    page_filename = os.path.join(pages_dir, f"{filename_base}.md")
+    page_filename = os.path.join(url_dir, f"{filename_base}.md")
 
     with open(page_filename, "w", encoding="utf-8") as f:
         f.write(markdown)
@@ -99,15 +98,12 @@ def _extract_and_queue_links(soup: BeautifulSoup, current_url: str, base_domain:
             urls_to_visit.append(normalized_full_url)
 
 
-async def crawl_website(start_url: str, scrape_id: str) -> list[str]:
+async def crawl_website(start_url: str, url_dir: str) -> list[str]:
     """
     Crawls the website starting from start_url, scrapes all internal links,
     stores content locally, and returns a list of all scraped texts.
     Handles both HTML and PDF content.
     """
-    pages_dir = get_pages_dir(scrape_id)
-    os.makedirs(pages_dir, exist_ok=True)
-
     base_domain = get_domain(start_url)
     visited_urls = set()
     urls_to_visit = deque([start_url])
@@ -117,8 +113,6 @@ async def crawl_website(start_url: str, scrape_id: str) -> list[str]:
 
     try:
         driver = get_web_driver()
-
-        print(f"Starting crawl for scrape_id: {scrape_id} from {start_url}")
 
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
@@ -172,7 +166,7 @@ async def crawl_website(start_url: str, scrape_id: str) -> list[str]:
                 print(f"No meaningful text extracted from {current_url}. Skipping for embedding.")
                 continue
 
-            _process_content_and_store(current_url, markdown, scrape_id, text_splitter, all_scraped_texts)
+            _process_content_and_store(current_url, markdown, text_splitter, all_scraped_texts, url_dir)
 
             # Extract links only from HTML pages (PDFs don't have navigable links in this context)
             if soup:
@@ -201,12 +195,24 @@ async def read_all_scraped_pages_text(scrape_id: str) -> list[str]:
         raise FileNotFoundError(f"Scraped pages directory for ID '{scrape_id}' not found at {pages_dir}")
 
     all_texts = []
-    for filename in os.listdir(pages_dir):
-        if filename.endswith(".md"):
-            filepath = os.path.join(pages_dir, filename)
-            try:
-                with open(filepath, "r", encoding="utf-8") as f:
-                    all_texts.append(f.read())
-            except Exception as e:
-                print(f"Error reading file {filepath}: {e}")
+    all_files = []
+
+    for url in os.listdir(pages_dir):
+        url_dir = get_url_page_dir(scrape_id, url)
+
+        for filename in os.listdir(url_dir):
+            if filename.endswith(".md"):
+                filepath = os.path.join(url_dir, filename)
+                all_files.append(filepath)
+
+    if not all_files:
+        raise Exception(f"No files available for scraping.")
+
+    for file in all_files:
+        try:
+            with open(file, "r", encoding="utf-8") as f:
+                all_texts.append(f.read())
+        except Exception as e:
+            print(f"Error reading file {file}: {e}")
+
     return all_texts

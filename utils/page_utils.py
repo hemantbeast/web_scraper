@@ -12,6 +12,10 @@ def get_pages_dir(scrape_id: str) -> str:
     """Returns the directory where individual scraped page contents are stored."""
     return os.path.join(get_scrape_dir(scrape_id), "pages")
 
+def get_url_page_dir(scrape_id: str, url: str) -> str:
+    """Returns the directory where individual scraped page of url contents are stored."""
+    return os.path.join(get_pages_dir(scrape_id), url)
+
 def get_faiss_index_dir(scrape_id: str) -> str:
     """Returns the directory where the FAISS index for a scrape ID is stored."""
     return os.path.join(get_scrape_dir(scrape_id), "faiss_index")
