@@ -1,8 +1,7 @@
-import io
 from urllib.parse import urlparse, parse_qs, urlencode
 
 import httpx
-import pypdf
+import pymupdf
 from bs4 import BeautifulSoup
 
 
@@ -103,11 +102,11 @@ async def extract_text_from_pdf_url(url: str) -> str:
             response.raise_for_status()
             pdf_bytes = response.content
 
-        # Use pypdf to read the PDF from bytes
-        reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
         text = ""
-        for page in reader.pages:
-            text += page.extract_text() or "" # extract_text() can return None
+        # Use pymupdf to read the PDF from bytes
+        with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
+            for page in doc:
+                text += page.get_text()
 
         if not text.strip():
             print(f"No text extracted from PDF: {url}")
